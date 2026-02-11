@@ -17,6 +17,7 @@ public:
   ~Program() noexcept;
 
   inline void Bind() const noexcept { glUseProgram(m_Id); }
+  inline GLuint GetId() const noexcept { return m_Id; }
 
 private:
   GLuint m_Id;

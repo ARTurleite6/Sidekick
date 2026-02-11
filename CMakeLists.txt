@@ -32,11 +32,19 @@ add_executable(Sidekick src/main.cpp
     src/Sidekick/Core/Application.hpp
     src/Sidekick/Core/Application.cpp
 
+    src/Sidekick/Core/Input.hpp
+    src/Sidekick/Core/Input.cpp
+
+    src/Sidekick/Events/Event.hpp
+
     src/Sidekick/Renderer/Shader.hpp
     src/Sidekick/Renderer/Shader.cpp
 
     src/Sidekick/Renderer/Program.hpp
     src/Sidekick/Renderer/Program.cpp
+
+    src/Sidekick/Renderer/Mesh.hpp
+    src/Sidekick/Renderer/Mesh.cpp
 )
 
 target_include_directories(Sidekick PRIVATE src)
