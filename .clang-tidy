@@ -1,0 +1,25 @@
+---
+Checks: >
+  clang-analyzer-*,
+  bugprone-*,
+  performance-*,
+  portability-*,
+  readability-*,
+  modernize-*,
+  -llvm-*,
+  -google-*,
+  -fuchsia-*,
+  -zircon-*,
+  -abseil-*,
+  -modernize-use-trailing-return-type,
+  -modernize-use-nodiscard,
+  -readability-identifier-naming,
+  -readability-magic-numbers,
+  -readability-function-cognitive-complexity,
+  -readability-identifier-length,
+  -readability-uppercase-literal-suffix,
+  -bugprone-easily-swappable-parameters
+WarningsAsErrors: ''
+HeaderFilterRegex: '^src/.*'
+FormatStyle: file
+...
