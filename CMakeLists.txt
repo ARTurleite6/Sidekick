@@ -43,10 +43,13 @@ add_executable(Sidekick
   src/main.cpp
   src/Sidekick/Core/Application.cpp
   src/Sidekick/Core/Application.h
+  src/Sidekick/Core/Assert.h
   src/Sidekick/Core/Event.h
   src/Sidekick/Core/Input.cpp
   src/Sidekick/Core/Input.h
   src/Sidekick/Core/KeyCodes.h
+  src/Sidekick/Core/Log.cpp
+  src/Sidekick/Core/Log.h
   src/Sidekick/Core/MouseCodes.h
   src/Sidekick/Core/Window.cpp
   src/Sidekick/Core/Window.h

@@ -1,6 +1,7 @@
 #include "Sidekick/Core/Application.h"
 
 #include <Sidekick/Core/Input.h>
+#include <Sidekick/Core/Log.h>
 
 #include <GLFW/glfw3.h>
 
@@ -11,7 +12,6 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include <iostream>
 #include <limits>
 #include <string>
 
@@ -176,13 +176,13 @@ bool Application::InitializeDawn() {
   instance_desc.requiredFeatures = &kTimedWaitAny;
   m_instance = wgpu::CreateInstance(&instance_desc);
   if (!m_instance) {
-    std::cerr << "Failed to create WebGPU instance.\n";
+    SK_ERROR("Failed to create WebGPU instance.");
     return false;
   }
 
   m_surface = wgpu::glfw::CreateSurfaceForWindow(m_instance, m_window->GetNativeWindow());
   if (!m_surface) {
-    std::cerr << "Failed to create WebGPU surface.\n";
+    SK_ERROR("Failed to create WebGPU surface.");
     return false;
   }
 
@@ -192,7 +192,7 @@ bool Application::InitializeDawn() {
                          [this](wgpu::RequestAdapterStatus status, wgpu::Adapter adapter, wgpu::StringView message) {
                            if (status != wgpu::RequestAdapterStatus::Success) {
                              std::string message_text(message.data, message.length);
-                             std::cerr << "Failed to get adapter: " << message_text << '\n';
+                             SK_ERROR("Failed to get adapter: {}", message_text);
                              return;
                            }
                            m_adapter = std::move(adapter);
@@ -207,7 +207,7 @@ bool Application::InitializeDawn() {
       wgpu::CallbackMode::AllowSpontaneous,
       [this](const wgpu::Device&, wgpu::DeviceLostReason reason, wgpu::StringView message) {
         std::string message_text(message.data, message.length);
-        std::cerr << "Device lost: " << static_cast<int>(reason) << " - " << message_text << '\n';
+        SK_ERROR("Device lost: {} - {}", static_cast<int>(reason), message_text);
         m_running = false;
       });
 
@@ -216,7 +216,7 @@ bool Application::InitializeDawn() {
                               [this](wgpu::RequestDeviceStatus status, wgpu::Device device, wgpu::StringView message) {
                                 if (status != wgpu::RequestDeviceStatus::Success) {
                                   std::string message_text(message.data, message.length);
-                                  std::cerr << "Failed to get device: " << message_text << '\n';
+                                  SK_ERROR("Failed to get device: {}", message_text);
                                   return;
                                 }
                                 m_device = std::move(device);
@@ -382,7 +382,7 @@ fn fs_main(input : VertexOutput) -> @location(0) vec4<f32> {
 void Application::ConfigureSurface(uint32_t width, uint32_t height) {
   wgpu::SurfaceCapabilities capabilities = {};
   if (!m_surface.GetCapabilities(m_adapter, &capabilities)) {
-    std::cerr << "Failed to query surface capabilities.\n";
+    SK_ERROR("Failed to query surface capabilities.");
     return;
   }
 
@@ -446,7 +446,7 @@ void Application::RenderFrame() {
       ConfigureSurface(m_width, m_height);
       return;
     }
-    std::cerr << "Failed to acquire surface texture. Status: " << static_cast<int>(surface_texture.status) << '\n';
+    SK_ERROR("Failed to acquire surface texture. Status: {}", static_cast<int>(surface_texture.status));
     m_running = false;
     return;
   }
