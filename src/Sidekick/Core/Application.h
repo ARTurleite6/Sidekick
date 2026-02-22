@@ -7,6 +7,7 @@
 
 #include "Sidekick/Core/Event.h"
 #include "Sidekick/Core/Window.h"
+#include "Sidekick/Renderer/Backend/GraphicsBackend.h"
 #include "Sidekick/Renderer/Camera.h"
 #include "Sidekick/Renderer/CameraController.h"
 
@@ -47,14 +48,15 @@ private:
   wgpu::Texture m_depth_texture;
   wgpu::TextureView m_depth_view;
 
-  wgpu::RenderPipeline m_pipeline;
-  wgpu::Buffer m_vertex_buffer;
-  wgpu::Buffer m_index_buffer;
-  wgpu::Buffer m_uniform_buffer;
-  wgpu::BindGroupLayout m_bind_group_layout;
-  wgpu::BindGroup m_bind_group;
-
   float m_last_time = 0.0f;
+
+  std::unique_ptr<Sidekick::Renderer::Backend::GraphicsBackend> m_graphics_backend;
+  Sidekick::Renderer::Backend::BufferHandle m_vertex_buffer;
+  Sidekick::Renderer::Backend::BufferHandle m_index_buffer;
+  Sidekick::Renderer::Backend::BufferHandle m_uniform_buffer;
+  Sidekick::Renderer::Backend::BindGroupLayoutHandle m_bind_group_layout;
+  Sidekick::Renderer::Backend::BindGroupHandle m_bind_group;
+  Sidekick::Renderer::Backend::PipelineHandle m_pipeline;
 
   std::unique_ptr<Sidekick::Renderer::Camera> m_camera;
   std::unique_ptr<Sidekick::Renderer::CameraController> m_camera_controller;

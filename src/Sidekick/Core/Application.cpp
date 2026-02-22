@@ -1,7 +1,7 @@
 #include "Sidekick/Core/Application.h"
 
-#include <Sidekick/Core/Input.h>
-#include <Sidekick/Core/Log.h>
+#include "Sidekick/Core/Input.h"
+#include "Sidekick/Core/Log.h"
 
 #include <GLFW/glfw3.h>
 
@@ -12,6 +12,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include <array>
+#include <cstdint>
 #include <limits>
 #include <string>
 
@@ -76,6 +78,19 @@ wgpu::CompositeAlphaMode PickAlphaMode(const wgpu::SurfaceCapabilities& capabili
   return wgpu::CompositeAlphaMode::Auto;
 }
 
+Sidekick::Renderer::Backend::PixelFormat ToBackendPixelFormat(wgpu::TextureFormat format) {
+  switch (format) {
+  case wgpu::TextureFormat::BGRA8UnormSrgb:
+    return Sidekick::Renderer::Backend::PixelFormat::BGRA8UnormSrgb;
+  case wgpu::TextureFormat::RGBA8UnormSrgb:
+    return Sidekick::Renderer::Backend::PixelFormat::RGBA8UnormSrgb;
+  case wgpu::TextureFormat::Depth24Plus:
+    return Sidekick::Renderer::Backend::PixelFormat::Depth24Plus;
+  default:
+    return Sidekick::Renderer::Backend::PixelFormat::Undefined;
+  }
+}
+
 } // namespace
 
 bool Application::Initialize() {
@@ -106,7 +121,7 @@ void Application::Run() {
     if (m_camera_controller && m_camera) {
       if (m_camera_controller->Update(*m_camera, delta_time)) {
         const glm::mat4 view_proj = m_camera->GetViewProjection();
-        m_queue.WriteBuffer(m_uniform_buffer, 0, glm::value_ptr(view_proj), sizeof(glm::mat4));
+        m_graphics_backend->UpdateBuffer(m_uniform_buffer, 0, glm::value_ptr(view_proj), sizeof(glm::mat4));
       }
     }
     RenderFrame();
@@ -122,6 +137,7 @@ void Application::OnEvent(Event& event) {
 }
 
 bool Application::OnWindowClose(WindowCloseEvent& event) {
+  (void)event;
   m_running = false;
   return true;
 }
@@ -136,20 +152,29 @@ bool Application::OnWindowResize(WindowResizeEvent& event) {
     const float aspect = static_cast<float>(event.GetWidth()) / static_cast<float>(event.GetHeight());
     m_camera->SetAspect(aspect);
     const glm::mat4 view_proj = m_camera->GetViewProjection();
-    m_queue.WriteBuffer(m_uniform_buffer, 0, glm::value_ptr(view_proj), sizeof(glm::mat4));
+    m_graphics_backend->UpdateBuffer(m_uniform_buffer, 0, glm::value_ptr(view_proj), sizeof(glm::mat4));
   }
   return true;
 }
 
 void Application::Shutdown() {
+  if (m_graphics_backend) {
+    m_graphics_backend->Shutdown();
+    m_graphics_backend.reset();
+  }
+
   if (m_surface) {
     m_surface.Unconfigure();
   }
+
   m_queue = nullptr;
   m_device = nullptr;
   m_adapter = nullptr;
   m_surface = nullptr;
   m_instance = nullptr;
+
+  m_camera_controller.reset();
+  m_camera.reset();
 
   m_window.reset();
   Input::Shutdown();
@@ -241,6 +266,24 @@ bool Application::InitializeDawn() {
 }
 
 bool Application::InitializeRenderer() {
+  m_graphics_backend =
+      Sidekick::Renderer::Backend::CreateGraphicsBackend(Sidekick::Renderer::Backend::GraphicsBackendType::Wgpu);
+  if (!m_graphics_backend) {
+    SK_ERROR("Failed to create graphics backend.");
+    return false;
+  }
+
+  Sidekick::Renderer::Backend::BackendBootstrapContext backend_context = {};
+  backend_context.type = Sidekick::Renderer::Backend::GraphicsBackendType::Wgpu;
+  backend_context.native_device = &m_device;
+  backend_context.native_queue = &m_queue;
+  backend_context.color_format = ToBackendPixelFormat(m_surface_format);
+  backend_context.depth_format = Sidekick::Renderer::Backend::PixelFormat::Depth24Plus;
+  if (!m_graphics_backend->Initialize(backend_context)) {
+    SK_ERROR("Failed to initialize graphics backend.");
+    return false;
+  }
+
   const float aspect = static_cast<float>(m_width) / static_cast<float>(m_height);
   m_camera = std::make_unique<Sidekick::Renderer::Camera>(45.0f, aspect, 0.1f, 100.0f);
   m_camera->SetPosition(glm::vec3(0.0f, 0.0f, 5.0f));
@@ -277,105 +320,97 @@ fn fs_main(input : VertexOutput) -> @location(0) vec4<f32> {
 }
 )";
 
-  wgpu::ShaderSourceWGSL wgsl_desc = {};
-  wgsl_desc.code = shader_source;
+  m_vertex_buffer = m_graphics_backend->CreateBuffer({
+      .size = sizeof(kCubeVertices),
+      .usage = Sidekick::Renderer::Backend::BufferUsageFlags::Vertex |
+               Sidekick::Renderer::Backend::BufferUsageFlags::CopyDst,
+      .initial_data = kCubeVertices.data(),
+      .initial_data_size = sizeof(kCubeVertices),
+  });
+  m_index_buffer = m_graphics_backend->CreateBuffer({
+      .size = sizeof(kCubeIndices),
+      .usage =
+          Sidekick::Renderer::Backend::BufferUsageFlags::Index | Sidekick::Renderer::Backend::BufferUsageFlags::CopyDst,
+      .initial_data = kCubeIndices.data(),
+      .initial_data_size = sizeof(kCubeIndices),
+  });
+  m_uniform_buffer = m_graphics_backend->CreateBuffer({
+      .size = sizeof(glm::mat4),
+      .usage = Sidekick::Renderer::Backend::BufferUsageFlags::Uniform |
+               Sidekick::Renderer::Backend::BufferUsageFlags::CopyDst,
+  });
 
-  wgpu::ShaderModuleDescriptor shader_desc = {};
-  shader_desc.nextInChain = &wgsl_desc;
-  wgpu::ShaderModule shader_module = m_device.CreateShaderModule(&shader_desc);
+  const auto shader = m_graphics_backend->CreateShader({.source_wgsl = shader_source});
 
-  wgpu::BindGroupLayoutEntry uniform_layout = {};
-  uniform_layout.binding = 0;
-  uniform_layout.visibility = wgpu::ShaderStage::Vertex;
-  uniform_layout.buffer.type = wgpu::BufferBindingType::Uniform;
-  uniform_layout.buffer.minBindingSize = sizeof(glm::mat4);
+  Sidekick::Renderer::Backend::BindGroupLayoutEntryDesc layout_entry = {};
+  layout_entry.binding = 0;
+  layout_entry.visibility = Sidekick::Renderer::Backend::ShaderStage::Vertex;
+  layout_entry.min_binding_size = sizeof(glm::mat4);
+  m_bind_group_layout = m_graphics_backend->CreateBindGroupLayout({
+      .entries = &layout_entry,
+      .entry_count = 1,
+  });
 
-  wgpu::BindGroupLayoutDescriptor bind_group_layout_desc = {};
-  bind_group_layout_desc.entryCount = 1;
-  bind_group_layout_desc.entries = &uniform_layout;
-  m_bind_group_layout = m_device.CreateBindGroupLayout(&bind_group_layout_desc);
-
-  wgpu::PipelineLayoutDescriptor pipeline_layout_desc = {};
-  pipeline_layout_desc.bindGroupLayoutCount = 1;
-  pipeline_layout_desc.bindGroupLayouts = &m_bind_group_layout;
-  wgpu::PipelineLayout pipeline_layout = m_device.CreatePipelineLayout(&pipeline_layout_desc);
-
-  wgpu::BufferDescriptor vertex_desc = {};
-  vertex_desc.size = sizeof(kCubeVertices);
-  vertex_desc.usage = wgpu::BufferUsage::Vertex | wgpu::BufferUsage::CopyDst;
-  m_vertex_buffer = m_device.CreateBuffer(&vertex_desc);
-  m_queue.WriteBuffer(m_vertex_buffer, 0, kCubeVertices.data(), sizeof(kCubeVertices));
-
-  wgpu::BufferDescriptor index_desc = {};
-  index_desc.size = sizeof(kCubeIndices);
-  index_desc.usage = wgpu::BufferUsage::Index | wgpu::BufferUsage::CopyDst;
-  m_index_buffer = m_device.CreateBuffer(&index_desc);
-  m_queue.WriteBuffer(m_index_buffer, 0, kCubeIndices.data(), sizeof(kCubeIndices));
-
-  wgpu::BufferDescriptor uniform_desc = {};
-  uniform_desc.size = sizeof(glm::mat4);
-  uniform_desc.usage = wgpu::BufferUsage::Uniform | wgpu::BufferUsage::CopyDst;
-  m_uniform_buffer = m_device.CreateBuffer(&uniform_desc);
-
-  wgpu::BindGroupEntry bind_group_entry = {};
+  Sidekick::Renderer::Backend::BindGroupEntryDesc bind_group_entry = {};
   bind_group_entry.binding = 0;
   bind_group_entry.buffer = m_uniform_buffer;
   bind_group_entry.offset = 0;
   bind_group_entry.size = sizeof(glm::mat4);
+  m_bind_group = m_graphics_backend->CreateBindGroup({
+      .layout = m_bind_group_layout,
+      .entries = &bind_group_entry,
+      .entry_count = 1,
+  });
 
-  wgpu::BindGroupDescriptor bind_group_desc = {};
-  bind_group_desc.layout = m_bind_group_layout;
-  bind_group_desc.entryCount = 1;
-  bind_group_desc.entries = &bind_group_entry;
-  m_bind_group = m_device.CreateBindGroup(&bind_group_desc);
-
-  std::array<wgpu::VertexAttribute, 2> attributes = {};
-  attributes[0].format = wgpu::VertexFormat::Float32x3;
+  std::array<Sidekick::Renderer::Backend::VertexAttributeDesc, 2> attributes = {};
+  attributes[0].format = Sidekick::Renderer::Backend::VertexFormat::Float32x3;
   attributes[0].offset = 0;
-  attributes[0].shaderLocation = 0;
-
-  attributes[1].format = wgpu::VertexFormat::Float32x3;
+  attributes[0].shader_location = 0;
+  attributes[1].format = Sidekick::Renderer::Backend::VertexFormat::Float32x3;
   attributes[1].offset = sizeof(glm::vec3);
-  attributes[1].shaderLocation = 1;
+  attributes[1].shader_location = 1;
 
-  wgpu::VertexBufferLayout vertex_layout = {};
-  vertex_layout.arrayStride = sizeof(Vertex);
-  vertex_layout.stepMode = wgpu::VertexStepMode::Vertex;
-  vertex_layout.attributeCount = 2;
+  Sidekick::Renderer::Backend::VertexBufferLayoutDesc vertex_layout = {};
+  vertex_layout.array_stride = sizeof(Vertex);
   vertex_layout.attributes = attributes.data();
+  vertex_layout.attribute_count = static_cast<uint32_t>(attributes.size());
 
-  wgpu::ColorTargetState color_target = {};
-  color_target.format = m_surface_format;
+  Sidekick::Renderer::Backend::ColorTargetDesc color_target = {};
+  color_target.format = ToBackendPixelFormat(m_surface_format);
 
-  wgpu::FragmentState fragment_state = {};
-  fragment_state.module = shader_module;
-  fragment_state.entryPoint = "fs_main";
-  fragment_state.targetCount = 1;
-  fragment_state.targets = &color_target;
+  Sidekick::Renderer::Backend::BindGroupLayoutHandle bind_group_layouts[] = {m_bind_group_layout};
 
-  wgpu::DepthStencilState depth_state = {};
-  depth_state.format = wgpu::TextureFormat::Depth24Plus;
-  depth_state.depthWriteEnabled = true;
-  depth_state.depthCompare = wgpu::CompareFunction::Less;
+  Sidekick::Renderer::Backend::PipelineDesc pipeline_desc = {};
+  pipeline_desc.shader = shader;
+  pipeline_desc.vertex_entry = "vs_main";
+  pipeline_desc.fragment_entry = "fs_main";
+  pipeline_desc.bind_group_layouts = bind_group_layouts;
+  pipeline_desc.bind_group_layout_count = 1;
+  pipeline_desc.vertex_buffers = &vertex_layout;
+  pipeline_desc.vertex_buffer_count = 1;
+  pipeline_desc.color_targets = &color_target;
+  pipeline_desc.color_target_count = 1;
+  pipeline_desc.has_depth_stencil = true;
+  pipeline_desc.depth_stencil = {
+      .format = Sidekick::Renderer::Backend::PixelFormat::Depth24Plus,
+      .depth_write_enabled = true,
+      .depth_compare = Sidekick::Renderer::Backend::CompareFunction::Less,
+  };
+  pipeline_desc.topology = Sidekick::Renderer::Backend::PrimitiveTopology::TriangleList;
+  pipeline_desc.cull_mode = Sidekick::Renderer::Backend::CullMode::Back;
+  pipeline_desc.front_face = Sidekick::Renderer::Backend::FrontFace::CCW;
 
-  wgpu::RenderPipelineDescriptor pipeline_desc = {};
-  pipeline_desc.layout = pipeline_layout;
-  pipeline_desc.vertex.module = shader_module;
-  pipeline_desc.vertex.entryPoint = "vs_main";
-  pipeline_desc.vertex.bufferCount = 1;
-  pipeline_desc.vertex.buffers = &vertex_layout;
-  pipeline_desc.primitive.topology = wgpu::PrimitiveTopology::TriangleList;
-  pipeline_desc.primitive.cullMode = wgpu::CullMode::Back;
-  pipeline_desc.primitive.frontFace = wgpu::FrontFace::CCW;
-  pipeline_desc.fragment = &fragment_state;
-  pipeline_desc.depthStencil = &depth_state;
-  pipeline_desc.multisample.count = 1;
-  m_pipeline = m_device.CreateRenderPipeline(&pipeline_desc);
+  m_pipeline = m_graphics_backend->CreatePipeline(pipeline_desc);
+
+  if (m_vertex_buffer.id == 0 || m_index_buffer.id == 0 || m_uniform_buffer.id == 0 || m_bind_group_layout.id == 0 ||
+      m_bind_group.id == 0 || m_pipeline.id == 0 || shader.id == 0) {
+    SK_ERROR("Failed to initialize renderer resources via graphics backend.");
+    return false;
+  }
 
   const glm::mat4 view_proj = m_camera->GetViewProjection();
-  m_queue.WriteBuffer(m_uniform_buffer, 0, glm::value_ptr(view_proj), sizeof(glm::mat4));
+  m_graphics_backend->UpdateBuffer(m_uniform_buffer, 0, glm::value_ptr(view_proj), sizeof(glm::mat4));
 
-  ConfigureSurface(m_width, m_height);
   return true;
 }
 
@@ -426,13 +461,13 @@ void Application::UpdateSurfaceSize() {
       const float aspect = static_cast<float>(m_width) / static_cast<float>(m_height);
       m_camera->SetAspect(aspect);
       const glm::mat4 view_proj = m_camera->GetViewProjection();
-      m_queue.WriteBuffer(m_uniform_buffer, 0, glm::value_ptr(view_proj), sizeof(glm::mat4));
+      m_graphics_backend->UpdateBuffer(m_uniform_buffer, 0, glm::value_ptr(view_proj), sizeof(glm::mat4));
     }
   }
 }
 
 void Application::RenderFrame() {
-  if (!m_surface || !m_device) {
+  if (!m_surface || !m_device || !m_graphics_backend) {
     return;
   }
 
@@ -453,35 +488,28 @@ void Application::RenderFrame() {
 
   wgpu::TextureView backbuffer_view = surface_texture.texture.CreateView();
 
-  wgpu::CommandEncoder encoder = m_device.CreateCommandEncoder();
+  const Sidekick::Renderer::Backend::FrameBeginDesc frame_begin = {
+      .clear_color = {.r = 0.53f, .g = 0.81f, .b = 0.92f, .a = 1.0f},
+      .clear_depth = 1.0f,
+  };
+  const Sidekick::Renderer::Backend::RenderTargetRefs targets = {
+      .color_view = &backbuffer_view,
+      .depth_view = &m_depth_view,
+  };
 
-  wgpu::RenderPassColorAttachment color_attachment = {};
-  color_attachment.view = backbuffer_view;
-  color_attachment.loadOp = wgpu::LoadOp::Clear;
-  color_attachment.storeOp = wgpu::StoreOp::Store;
-  color_attachment.clearValue = {.r = 0.53f, .g = 0.81f, .b = 0.92f, .a = 1.0f};
+  if (!m_graphics_backend->BeginFrame(frame_begin, targets)) {
+    SK_ERROR("Failed to begin graphics backend frame.");
+    m_running = false;
+    return;
+  }
 
-  wgpu::RenderPassDepthStencilAttachment depth_attachment = {};
-  depth_attachment.view = m_depth_view;
-  depth_attachment.depthLoadOp = wgpu::LoadOp::Clear;
-  depth_attachment.depthStoreOp = wgpu::StoreOp::Store;
-  depth_attachment.depthClearValue = 1.0f;
+  m_graphics_backend->SetPipeline(m_pipeline);
+  m_graphics_backend->SetBindGroup(0, m_bind_group);
+  m_graphics_backend->SetVertexBuffer(0, m_vertex_buffer, 0);
+  m_graphics_backend->SetIndexBuffer(m_index_buffer, Sidekick::Renderer::Backend::IndexType::Uint16, 0);
+  m_graphics_backend->DrawIndexed(static_cast<uint32_t>(kCubeIndices.size()), 1, 0, 0, 0);
+  m_graphics_backend->EndFrameAndSubmit();
 
-  wgpu::RenderPassDescriptor render_pass_desc = {};
-  render_pass_desc.colorAttachmentCount = 1;
-  render_pass_desc.colorAttachments = &color_attachment;
-  render_pass_desc.depthStencilAttachment = &depth_attachment;
-
-  wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&render_pass_desc);
-  pass.SetPipeline(m_pipeline);
-  pass.SetBindGroup(0, m_bind_group);
-  pass.SetVertexBuffer(0, m_vertex_buffer);
-  pass.SetIndexBuffer(m_index_buffer, wgpu::IndexFormat::Uint16);
-  pass.DrawIndexed(static_cast<uint32_t>(sizeof(kCubeIndices) / sizeof(kCubeIndices[0])));
-  pass.End();
-
-  wgpu::CommandBuffer commands = encoder.Finish();
-  m_queue.Submit(1, &commands);
   m_surface.Present();
 }
 

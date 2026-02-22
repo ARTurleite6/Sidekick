@@ -25,6 +25,7 @@
 - use clang-format formatter, with the .clang-format config
 - Use `.clang-tidy` for static analysis and keep warnings under control in touched files.
 - Always try to reduce the number of memory allocations when possible
+- NEVER add an I prefix to Interfaces (e.g. IGraphicsBackend vs GraphicsBackend)
 
 ## Testing Guidelines
 - There is no test framework configured.

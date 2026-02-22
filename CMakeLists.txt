@@ -57,6 +57,10 @@ add_executable(Sidekick
   src/Sidekick/Renderer/Camera.h
   src/Sidekick/Renderer/CameraController.cpp
   src/Sidekick/Renderer/CameraController.h
+  src/Sidekick/Renderer/Backend/GraphicsBackend.cpp
+  src/Sidekick/Renderer/Backend/GraphicsBackend.h
+  src/Sidekick/Renderer/Backend/WgpuBackend.cpp
+  src/Sidekick/Renderer/Backend/WgpuBackend.h
 )
 target_include_directories(Sidekick PRIVATE src)
 target_link_libraries(Sidekick PRIVATE glfw glm::glm dawn::dawn_glfw dawn::dawn_native dawn::dawn_proc)
