@@ -13,9 +13,11 @@ Use `just` for routine workflows:
 If you need lower-level control, use the preset directly: `cmake --preset dev` and `cmake --build --preset dev`.
 
 ## Coding Style & Naming Conventions
-This project uses C++23. Formatting is enforced by `.clang-format`: 2-space indentation, no tabs, Allman braces, left-aligned pointers/references, and a 120-column limit. Run `clang-format -i src/main.cpp src/Sidekick/Core/*.cpp src/Sidekick/Core/*.hpp` before submitting changes.
+This project uses C++23. Formatting is enforced by `.clang-format`: 2-space indentation, no tabs, Allman braces, left-aligned pointers/references, and a 120-column limit. Run `clang-format -i src/main.cpp src/Sidekick/Core/*.cpp src/Sidekick/Core/*.hpp src/Sidekick/Renderer/*.cpp src/Sidekick/Renderer/*.hpp` before submitting changes.
 
-Use `PascalCase` for types (`Application`, `WindowDescriptor`), `m_` prefixes for private members (`m_Window`), `g_snake_case` for globals (`g_glfw_window_owners`), and `snake_case` for local variables where it improves readability. Keep headers focused on declarations and prefer moving non-trivial definitions into `.cpp` files.
+For core systems such as `Window` and `GraphicsContext`, prefer fail-fast initialization over `IsValid`-style runtime checks. If two-phase setup is needed, let `Init()` return `bool` and promote failure at the owning boundary.
+
+Use `PascalCase` for types (`Application`, `WindowDescriptor`) and public fields, `m_` prefixes for private members (`m_Window`), `g_snake_case` for globals (`g_glfw_window_owners`), and `snake_case` for local variables where it improves readability. For template parameter names, do not use a `T` prefix; prefer names like `EventType` or `Callback`. Prefer brace initialization with `{}` by default, and use `=` only when necessary. Keep headers focused on declarations and prefer moving non-trivial definitions into `.cpp` files.
 
 ## Testing Guidelines
 There is no dedicated test suite yet. At minimum, verify that `just build` succeeds and `just run` launches the application window without immediate shutdown or runtime errors. When tests are added, place them in a dedicated test target and keep names aligned with the subsystem under test, for example `WindowTests` or `ApplicationTests`.

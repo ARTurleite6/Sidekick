@@ -1,8 +1,11 @@
 #include "Sidekick/Core/Window.hpp"
 
+#include "Sidekick/Core/Event.hpp"
+
 #include <GLFW/glfw3.h>
 
-#include <iostream>
+#include <cstdint>
+#include <stdexcept>
 #include <utility>
 
 namespace Sidekick
@@ -13,15 +16,33 @@ Window::Window(WindowDescriptor&& descriptor) : m_Descriptor{std::move(descripto
 {
   if (!m_OwnsGlfw)
   {
-    return;
+    throw std::runtime_error{"Failed to initialize GLFW"};
   }
 
-  m_Window = glfwCreateWindow(m_Descriptor.width, m_Descriptor.height, m_Descriptor.title.c_str(), nullptr, nullptr);
-  if (m_Window == nullptr)
+  try
   {
-    std::cerr << "Failed to create GLFW window\n";
-    ReleaseGlfw();
-    m_OwnsGlfw = false;
+    m_Window = glfwCreateWindow(m_Descriptor.Width, m_Descriptor.Height, m_Descriptor.Title.c_str(), nullptr, nullptr);
+    if (m_Window == nullptr)
+    {
+      throw std::runtime_error{"Failed to create GLFW window"};
+    }
+
+    glfwSetWindowUserPointer(m_Window, this);
+    glfwSetWindowCloseCallback(m_Window, CloseCallback);
+    glfwSetFramebufferSizeCallback(m_Window, ResizeCallback);
+
+    const Extent2D framebuffer_extent = GetFramebufferExtent();
+    const bool initialized =
+        m_GraphicsContext.Init({.NativeWindow = m_Window, .FramebufferExtent = framebuffer_extent});
+    if (!initialized)
+    {
+      throw std::runtime_error{"Failed to initialize GraphicsContext"};
+    }
+  }
+  catch (...)
+  {
+    Cleanup();
+    throw;
   }
 }
 
@@ -32,8 +53,12 @@ Window::~Window()
 
 Window::Window(Window&& other) noexcept
     : m_Descriptor(std::move(other.m_Descriptor)), m_Window(std::exchange(other.m_Window, nullptr)),
-      m_OwnsGlfw(std::exchange(other.m_OwnsGlfw, false))
+      m_GraphicsContext(std::move(other.m_GraphicsContext)), m_OwnsGlfw(std::exchange(other.m_OwnsGlfw, false))
 {
+  if (m_Window != nullptr)
+  {
+    glfwSetWindowUserPointer(m_Window, this);
+  }
 }
 
 Window& Window::operator=(Window&& other) noexcept
@@ -47,27 +72,71 @@ Window& Window::operator=(Window&& other) noexcept
 
   m_Descriptor = std::move(other.m_Descriptor);
   m_Window = std::exchange(other.m_Window, nullptr);
+  m_GraphicsContext = std::move(other.m_GraphicsContext);
   m_OwnsGlfw = std::exchange(other.m_OwnsGlfw, false);
+
+  if (m_Window != nullptr)
+  {
+    glfwSetWindowUserPointer(m_Window, this);
+  }
 
   return *this;
 }
 
-bool Window::IsValid() const
-{
-  return m_Window != nullptr;
-}
-
-bool Window::ShouldClose() const
-{
-  return m_Window != nullptr && glfwWindowShouldClose(m_Window) == GLFW_TRUE;
-}
-
 void Window::PollEvents() const
 {
-  if (m_Window != nullptr)
+  glfwPollEvents();
+}
+
+GraphicsContext& Window::GetGraphicsContext()
+{
+  return m_GraphicsContext;
+}
+
+const GraphicsContext& Window::GetGraphicsContext() const
+{
+  return m_GraphicsContext;
+}
+
+GLFWwindow* Window::GetNativeWindow() const
+{
+  return m_Window;
+}
+
+Extent2D Window::GetFramebufferExtent() const
+{
+  int width{0};
+  int height{0};
+  glfwGetFramebufferSize(m_Window, &width, &height);
+
+  return {.Width = static_cast<uint32_t>(width), .Height = static_cast<uint32_t>(height)};
+}
+
+void Window::CloseCallback(GLFWwindow* window)
+{
+  auto* owner = static_cast<Window*>(glfwGetWindowUserPointer(window));
+  if (owner == nullptr)
   {
-    glfwPollEvents();
+    return;
   }
+
+  Event event{.Kind = WindowClosedEvent{}};
+  owner->NotifyEvent(event);
+}
+
+void Window::ResizeCallback(GLFWwindow* window, int width, int height)
+{
+  auto* owner = static_cast<Window*>(glfwGetWindowUserPointer(window));
+  if (owner == nullptr)
+  {
+    return;
+  }
+
+  owner->m_Descriptor.Width = width;
+  owner->m_Descriptor.Height = height;
+
+  Event event{.Kind = WindowResizeEvent{.Width = width, .Height = height}};
+  owner->NotifyEvent(event);
 }
 
 bool Window::AcquireGlfw()
@@ -76,7 +145,6 @@ bool Window::AcquireGlfw()
   {
     if (glfwInit() == GLFW_FALSE)
     {
-      std::cerr << "Failed to initialize GLFW\n";
       return false;
     }
 
@@ -101,10 +169,21 @@ void Window::ReleaseGlfw()
   }
 }
 
+void Window::NotifyEvent(Event& event) const
+{
+  if (m_Descriptor.EventCallback)
+  {
+    m_Descriptor.EventCallback(event);
+  }
+}
+
 void Window::Cleanup()
 {
+  m_GraphicsContext = {};
+
   if (m_Window != nullptr)
   {
+    glfwSetWindowUserPointer(m_Window, nullptr);
     glfwDestroyWindow(m_Window);
     m_Window = nullptr;
   }

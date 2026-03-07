@@ -1,14 +1,13 @@
 #pragma once
 
-#include <glm/ext/vector_float3.hpp>
-#include <webgpu/webgpu.h>
-
 #include "Sidekick/Core/Window.hpp"
-
-#include <iostream>
 
 namespace Sidekick
 {
+struct Event;
+struct WindowClosedEvent;
+struct WindowResizeEvent;
+
 class Application
 {
 public:
@@ -17,7 +16,12 @@ public:
   void Run();
 
 private:
+  void OnEvent(Event& event);
+  bool OnWindowClosed(WindowClosedEvent& event);
+  bool OnWindowResized(WindowResizeEvent& event);
+
   bool m_Running{true};
+  bool m_IsMinimized{false};
   Window m_Window;
 };
 } // namespace Sidekick

@@ -67,8 +67,11 @@ set(SIDEKICK_SOURCES
 
     src/Sidekick/Core/Application.hpp
     src/Sidekick/Core/Application.cpp
+    src/Sidekick/Core/Event.hpp
     src/Sidekick/Core/Window.hpp
     src/Sidekick/Core/Window.cpp
+    src/Sidekick/Renderer/GraphicsContext.hpp
+    src/Sidekick/Renderer/GraphicsContext.cpp
 )
 
 add_executable(sidekick ${SIDEKICK_SOURCES})
