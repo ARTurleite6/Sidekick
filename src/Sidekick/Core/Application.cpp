@@ -1,7 +1,7 @@
 #include "Sidekick/Core/Application.hpp"
 
 #include "Sidekick/Core/Event.hpp"
-#include "Sidekick/Renderer/GraphicsContext.hpp"
+#include "Sidekick/Renderer/GraphicsBackend.hpp"
 
 #include <functional>
 
@@ -39,7 +39,7 @@ bool Application::OnWindowResized(WindowResizeEvent& window_resize_event)
   }
 
   m_IsMinimized = false;
-  m_Window.GetGraphicsContext().Resize(static_cast<uint32_t>(window_resize_event.Width),
+  m_Window.GetGraphicsBackend().Resize(static_cast<uint32_t>(window_resize_event.Width),
                                        static_cast<uint32_t>(window_resize_event.Height));
   return true;
 }
@@ -52,7 +52,7 @@ void Application::Run()
                                                         .ClearValue = {.R = 1.0, .G = 0.0, .B = 0.0, .A = 1.0},
                                                     }};
 
-  GraphicsContext& graphics_context = m_Window.GetGraphicsContext();
+  GraphicsBackend& graphics_backend = m_Window.GetGraphicsBackend();
 
   while (m_Running)
   {
@@ -62,10 +62,10 @@ void Application::Run()
       continue;
     }
 
-    graphics_context.BeginFrame();
-    graphics_context.BeginRenderPass(render_pass_descriptor);
-    graphics_context.EndRenderPass();
-    graphics_context.EndFrame();
+    graphics_backend.BeginFrame();
+    graphics_backend.BeginRenderPass(render_pass_descriptor);
+    graphics_backend.EndRenderPass();
+    graphics_backend.EndFrame();
   }
 }
 } // namespace Sidekick

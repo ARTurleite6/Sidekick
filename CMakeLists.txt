@@ -70,8 +70,10 @@ set(SIDEKICK_SOURCES
     src/Sidekick/Core/Event.hpp
     src/Sidekick/Core/Window.hpp
     src/Sidekick/Core/Window.cpp
-    src/Sidekick/Renderer/GraphicsContext.hpp
-    src/Sidekick/Renderer/GraphicsContext.cpp
+    src/Sidekick/Renderer/GraphicsBackend.hpp
+    src/Sidekick/Renderer/GraphicsBackend.cpp
+    src/Sidekick/Platform/Wgpu/WgpuBackend.hpp
+    src/Sidekick/Platform/Wgpu/WgpuBackend.cpp
 )
 
 add_executable(sidekick ${SIDEKICK_SOURCES})

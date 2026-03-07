@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Sidekick/Core/Event.hpp"
-#include "Sidekick/Renderer/GraphicsContext.hpp"
+#include "Sidekick/Renderer/GraphicsBackend.hpp"
 
 #include <GLFW/glfw3.h>
 
@@ -31,8 +31,8 @@ public:
   Window& operator=(Window&& other) noexcept;
 
   void PollEvents() const;
-  [[nodiscard]] GraphicsContext& GetGraphicsContext();
-  [[nodiscard]] const GraphicsContext& GetGraphicsContext() const;
+  [[nodiscard]] GraphicsBackend& GetGraphicsBackend();
+  [[nodiscard]] const GraphicsBackend& GetGraphicsBackend() const;
   [[nodiscard]] GLFWwindow* GetNativeWindow() const;
   [[nodiscard]] Extent2D GetFramebufferExtent() const;
 
@@ -49,7 +49,7 @@ private:
 
   WindowDescriptor m_Descriptor;
   GLFWwindow* m_Window{nullptr};
-  GraphicsContext m_GraphicsContext;
+  std::unique_ptr<GraphicsBackend> m_GraphicsBackend;
 
   bool m_OwnsGlfw{false};
 };

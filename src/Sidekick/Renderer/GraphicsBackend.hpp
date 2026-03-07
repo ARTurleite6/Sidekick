@@ -51,19 +51,17 @@ struct RenderPassDescriptor
   ColorAttachmentDescriptor ColorAttachment{};
 };
 
-class GraphicsBackend;
-
-class GraphicsContext
+class GraphicsBackend
 {
 public:
-  GraphicsContext();
-  ~GraphicsContext();
+  static std::unique_ptr<GraphicsBackend> Create();
 
-  GraphicsContext(const GraphicsContext&) = delete;
-  GraphicsContext& operator=(const GraphicsContext&) = delete;
+  virtual ~GraphicsBackend() = default;
 
-  GraphicsContext(GraphicsContext&& other) noexcept;
-  GraphicsContext& operator=(GraphicsContext&& other) noexcept;
+  GraphicsBackend(const GraphicsBackend&) = delete;
+  GraphicsBackend& operator=(const GraphicsBackend&) = delete;
+  GraphicsBackend(GraphicsBackend&&) noexcept = default;
+  GraphicsBackend& operator=(GraphicsBackend&&) noexcept = default;
 
   bool Init(const GraphicsContextDescriptor& descriptor);
 
@@ -71,11 +69,21 @@ public:
   void BeginRenderPass(const RenderPassDescriptor& descriptor);
   void EndRenderPass();
   void EndFrame();
-  void Resize(uint32_t width, uint32_t height);
+  void Resize(std::uint32_t width, std::uint32_t height);
+
+protected:
+  GraphicsBackend() = default;
+
+  virtual bool OnInit(const GraphicsContextDescriptor& descriptor) = 0;
+
+  virtual void OnBeginFrame() = 0;
+  virtual void OnBeginRenderPass(const RenderPassDescriptor& descriptor) = 0;
+  virtual void OnEndRenderPass() = 0;
+  virtual void OnEndFrame() = 0;
+  virtual void OnResize(std::uint32_t width, std::uint32_t height) = 0;
 
 private:
-  std::unique_ptr<GraphicsBackend> m_Backend;
-
+  bool m_Initialized{false};
   bool m_FrameActive{false};
   bool m_RenderPassActive{false};
 };

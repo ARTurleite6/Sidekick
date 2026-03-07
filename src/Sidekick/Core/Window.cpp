@@ -32,11 +32,13 @@ Window::Window(WindowDescriptor&& descriptor) : m_Descriptor{std::move(descripto
     glfwSetFramebufferSizeCallback(m_Window, ResizeCallback);
 
     const Extent2D framebuffer_extent = GetFramebufferExtent();
+    m_GraphicsBackend = GraphicsBackend::Create();
     const bool initialized =
-        m_GraphicsContext.Init({.NativeWindow = m_Window, .FramebufferExtent = framebuffer_extent});
+        m_GraphicsBackend != nullptr &&
+        m_GraphicsBackend->Init({.NativeWindow = m_Window, .FramebufferExtent = framebuffer_extent});
     if (!initialized)
     {
-      throw std::runtime_error{"Failed to initialize GraphicsContext"};
+      throw std::runtime_error{"Failed to initialize GraphicsBackend"};
     }
   }
   catch (...)
@@ -53,7 +55,7 @@ Window::~Window()
 
 Window::Window(Window&& other) noexcept
     : m_Descriptor(std::move(other.m_Descriptor)), m_Window(std::exchange(other.m_Window, nullptr)),
-      m_GraphicsContext(std::move(other.m_GraphicsContext)), m_OwnsGlfw(std::exchange(other.m_OwnsGlfw, false))
+      m_GraphicsBackend(std::move(other.m_GraphicsBackend)), m_OwnsGlfw(std::exchange(other.m_OwnsGlfw, false))
 {
   if (m_Window != nullptr)
   {
@@ -72,7 +74,7 @@ Window& Window::operator=(Window&& other) noexcept
 
   m_Descriptor = std::move(other.m_Descriptor);
   m_Window = std::exchange(other.m_Window, nullptr);
-  m_GraphicsContext = std::move(other.m_GraphicsContext);
+  m_GraphicsBackend = std::move(other.m_GraphicsBackend);
   m_OwnsGlfw = std::exchange(other.m_OwnsGlfw, false);
 
   if (m_Window != nullptr)
@@ -88,14 +90,14 @@ void Window::PollEvents() const
   glfwPollEvents();
 }
 
-GraphicsContext& Window::GetGraphicsContext()
+GraphicsBackend& Window::GetGraphicsBackend()
 {
-  return m_GraphicsContext;
+  return *m_GraphicsBackend;
 }
 
-const GraphicsContext& Window::GetGraphicsContext() const
+const GraphicsBackend& Window::GetGraphicsBackend() const
 {
-  return m_GraphicsContext;
+  return *m_GraphicsBackend;
 }
 
 GLFWwindow* Window::GetNativeWindow() const
@@ -179,7 +181,7 @@ void Window::NotifyEvent(Event& event) const
 
 void Window::Cleanup()
 {
-  m_GraphicsContext = {};
+  m_GraphicsBackend.reset();
 
   if (m_Window != nullptr)
   {

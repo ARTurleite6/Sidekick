@@ -1,4 +1,6 @@
-#include "Sidekick/Renderer/GraphicsContext.hpp"
+#include "Sidekick/Platform/Wgpu/WgpuBackend.hpp"
+
+#include "Sidekick/Renderer/GraphicsBackend.hpp"
 
 #include <webgpu/webgpu_cpp.h>
 #include <webgpu/webgpu_cpp_print.h>
@@ -7,7 +9,6 @@
 #include <cassert>
 #include <cstdint>
 #include <iostream>
-#include <memory>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -17,7 +18,7 @@ namespace Sidekick
 {
 namespace
 {
-wgpu::LoadOp ToWgpu(LoadOp load_operation)
+constexpr wgpu::LoadOp ToWgpu(LoadOp load_operation)
 {
   switch (load_operation)
   {
@@ -30,7 +31,7 @@ wgpu::LoadOp ToWgpu(LoadOp load_operation)
   return wgpu::LoadOp::Undefined;
 }
 
-wgpu::StoreOp ToWgpu(StoreOp store_operation)
+constexpr wgpu::StoreOp ToWgpu(StoreOp store_operation)
 {
   switch (store_operation)
   {
@@ -43,7 +44,7 @@ wgpu::StoreOp ToWgpu(StoreOp store_operation)
   return wgpu::StoreOp::Undefined;
 }
 
-wgpu::Color ToWgpu(const ClearColor& clear_color)
+constexpr wgpu::Color ToWgpu(const ClearColor& clear_color)
 {
   return {.r = clear_color.R, .g = clear_color.G, .b = clear_color.B, .a = clear_color.A};
 }
@@ -109,131 +110,7 @@ void DeviceLostCallback(const wgpu::Device& device [[maybe_unused]], wgpu::Devic
 }
 } // namespace
 
-class GraphicsBackend
-{
-public:
-  GraphicsBackend() = default;
-  GraphicsBackend(const GraphicsBackend&) = default;
-  GraphicsBackend(GraphicsBackend&&) noexcept = default;
-  GraphicsBackend& operator=(const GraphicsBackend&) = default;
-  GraphicsBackend& operator=(GraphicsBackend&&) noexcept = default;
-  virtual ~GraphicsBackend() = default;
-
-  virtual bool Init(const GraphicsContextDescriptor& descriptor) = 0;
-
-  virtual void BeginFrame() = 0;
-  virtual void BeginRenderPass(const RenderPassDescriptor& descriptor) = 0;
-  virtual void EndRenderPass() = 0;
-  virtual void EndFrame() = 0;
-  virtual void Resize(uint32_t width, uint32_t height) = 0;
-};
-
-class WgpuGraphicsBackend final : public GraphicsBackend
-{
-public:
-  bool Init(const GraphicsContextDescriptor& descriptor) override;
-
-  void BeginFrame() override;
-  void BeginRenderPass(const RenderPassDescriptor& descriptor) override;
-  void EndRenderPass() override;
-  void EndFrame() override;
-  void Resize(uint32_t width, uint32_t height) override;
-
-private:
-  bool RequestAdapter();
-  bool RequestDevice();
-  bool ConfigureSurface(uint32_t width, uint32_t height);
-  bool AcquireSurfaceTexture();
-  void ResetTransientState();
-
-  wgpu::Instance m_Instance;
-  wgpu::Adapter m_Adapter;
-  wgpu::Device m_Device;
-  wgpu::Queue m_Queue;
-  wgpu::Surface m_Surface;
-  wgpu::SurfaceConfiguration m_SurfaceConfiguration{};
-
-  wgpu::SurfaceTexture m_SurfaceTexture{};
-  wgpu::CommandEncoder m_CommandEncoder;
-  wgpu::RenderPassEncoder m_RenderPassEncoder;
-};
-
-GraphicsContext::~GraphicsContext() = default;
-
-GraphicsContext::GraphicsContext() = default;
-
-GraphicsContext::GraphicsContext(GraphicsContext&& other) noexcept = default;
-
-GraphicsContext& GraphicsContext::operator=(GraphicsContext&& other) noexcept = default;
-
-bool GraphicsContext::Init(const GraphicsContextDescriptor& descriptor)
-{
-  assert(m_Backend == nullptr);
-  if (m_Backend != nullptr)
-  {
-    return false;
-  }
-
-  auto backend = std::make_unique<WgpuGraphicsBackend>();
-  if (!backend->Init(descriptor))
-  {
-    return false;
-  }
-
-  m_Backend = std::move(backend);
-  return true;
-}
-
-void GraphicsContext::BeginFrame()
-{
-  assert(m_Backend != nullptr);
-  assert(!m_FrameActive);
-  assert(!m_RenderPassActive);
-
-  m_Backend->BeginFrame();
-  m_FrameActive = true;
-}
-
-void GraphicsContext::BeginRenderPass(const RenderPassDescriptor& descriptor)
-{
-  assert(m_Backend != nullptr);
-  assert(m_FrameActive);
-  assert(!m_RenderPassActive);
-
-  m_Backend->BeginRenderPass(descriptor);
-  m_RenderPassActive = true;
-}
-
-void GraphicsContext::EndRenderPass()
-{
-  assert(m_Backend != nullptr);
-  assert(m_FrameActive);
-  assert(m_RenderPassActive);
-
-  m_Backend->EndRenderPass();
-  m_RenderPassActive = false;
-}
-
-void GraphicsContext::EndFrame()
-{
-  assert(m_Backend != nullptr);
-  assert(m_FrameActive);
-  assert(!m_RenderPassActive);
-
-  m_Backend->EndFrame();
-  m_FrameActive = false;
-}
-
-void GraphicsContext::Resize(uint32_t width, uint32_t height)
-{
-  assert(m_Backend != nullptr);
-  assert(!m_FrameActive);
-  assert(!m_RenderPassActive);
-
-  m_Backend->Resize(width, height);
-}
-
-bool WgpuGraphicsBackend::Init(const GraphicsContextDescriptor& descriptor)
+bool WgpuGraphicsBackend::OnInit(const GraphicsContextDescriptor& descriptor)
 {
   if (descriptor.NativeWindow == nullptr)
   {
@@ -273,7 +150,7 @@ bool WgpuGraphicsBackend::Init(const GraphicsContextDescriptor& descriptor)
   return ConfigureSurface(descriptor.FramebufferExtent.Width, descriptor.FramebufferExtent.Height);
 }
 
-void WgpuGraphicsBackend::BeginFrame()
+void WgpuGraphicsBackend::OnBeginFrame()
 {
   assert(m_CommandEncoder == nullptr);
   assert(m_RenderPassEncoder == nullptr);
@@ -293,7 +170,7 @@ void WgpuGraphicsBackend::BeginFrame()
   }
 }
 
-void WgpuGraphicsBackend::BeginRenderPass(const RenderPassDescriptor& descriptor)
+void WgpuGraphicsBackend::OnBeginRenderPass(const RenderPassDescriptor& descriptor)
 {
   assert(m_CommandEncoder != nullptr);
   assert(m_RenderPassEncoder == nullptr);
@@ -305,15 +182,17 @@ void WgpuGraphicsBackend::BeginRenderPass(const RenderPassDescriptor& descriptor
     throw std::runtime_error{"Failed to create WebGPU texture view"};
   }
 
-  wgpu::RenderPassColorAttachment color_attachment{};
-  color_attachment.view = texture_view;
-  color_attachment.loadOp = ToWgpu(descriptor.ColorAttachment.LoadOperation);
-  color_attachment.storeOp = ToWgpu(descriptor.ColorAttachment.StoreOperation);
-  color_attachment.clearValue = ToWgpu(descriptor.ColorAttachment.ClearValue);
+  wgpu::RenderPassColorAttachment color_attachment{
+      .view = texture_view,
+      .loadOp = ToWgpu(descriptor.ColorAttachment.LoadOperation),
+      .storeOp = ToWgpu(descriptor.ColorAttachment.StoreOperation),
+      .clearValue = ToWgpu(descriptor.ColorAttachment.ClearValue),
+  };
 
-  wgpu::RenderPassDescriptor render_pass_descriptor{};
-  render_pass_descriptor.colorAttachmentCount = 1;
-  render_pass_descriptor.colorAttachments = &color_attachment;
+  wgpu::RenderPassDescriptor render_pass_descriptor{
+      .colorAttachmentCount = 1,
+      .colorAttachments = &color_attachment,
+  };
 
   m_RenderPassEncoder = m_CommandEncoder.BeginRenderPass(&render_pass_descriptor);
   if (m_RenderPassEncoder == nullptr)
@@ -322,7 +201,7 @@ void WgpuGraphicsBackend::BeginRenderPass(const RenderPassDescriptor& descriptor
   }
 }
 
-void WgpuGraphicsBackend::EndRenderPass()
+void WgpuGraphicsBackend::OnEndRenderPass()
 {
   assert(m_RenderPassEncoder != nullptr);
 
@@ -330,7 +209,7 @@ void WgpuGraphicsBackend::EndRenderPass()
   m_RenderPassEncoder = nullptr;
 }
 
-void WgpuGraphicsBackend::EndFrame()
+void WgpuGraphicsBackend::OnEndFrame()
 {
   assert(m_CommandEncoder != nullptr);
   assert(m_RenderPassEncoder == nullptr);
@@ -354,7 +233,7 @@ void WgpuGraphicsBackend::EndFrame()
   }
 }
 
-void WgpuGraphicsBackend::Resize(uint32_t width, uint32_t height)
+void WgpuGraphicsBackend::OnResize(std::uint32_t width, std::uint32_t height)
 {
   assert(m_CommandEncoder == nullptr);
   assert(m_RenderPassEncoder == nullptr);
@@ -369,8 +248,9 @@ bool WgpuGraphicsBackend::RequestAdapter()
 {
   AdapterRequestState request_state{};
 
-  wgpu::RequestAdapterOptions options{};
-  options.compatibleSurface = m_Surface;
+  wgpu::RequestAdapterOptions options{
+      .compatibleSurface = m_Surface,
+  };
 
   const wgpu::Future adapter_future =
       m_Instance.RequestAdapter(&options, wgpu::CallbackMode::WaitAnyOnly, AdapterRequestCallback, &request_state);
@@ -430,14 +310,15 @@ bool WgpuGraphicsBackend::ConfigureSurface(std::uint32_t width, std::uint32_t he
     return false;
   }
 
-  m_SurfaceConfiguration = {};
-  m_SurfaceConfiguration.device = m_Device;
-  m_SurfaceConfiguration.usage = wgpu::TextureUsage::RenderAttachment;
-  m_SurfaceConfiguration.format = capabilities.formats[0];
-  m_SurfaceConfiguration.alphaMode = capabilities.alphaModes[0];
-  m_SurfaceConfiguration.presentMode = capabilities.presentModes[0];
-  m_SurfaceConfiguration.width = width == 0 ? 1 : width;
-  m_SurfaceConfiguration.height = height == 0 ? 1 : height;
+  m_SurfaceConfiguration = {
+      .device = m_Device,
+      .format = capabilities.formats[0],
+      .usage = wgpu::TextureUsage::RenderAttachment,
+      .width = width == 0 ? 1 : width,
+      .height = height == 0 ? 1 : height,
+      .alphaMode = capabilities.alphaModes[0],
+      .presentMode = capabilities.presentModes[0],
+  };
 
   m_Surface.Configure(&m_SurfaceConfiguration);
   return true;
