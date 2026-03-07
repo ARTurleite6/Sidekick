@@ -1,0 +1,46 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 26,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "dev",
+      "displayName": "Development",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/dev",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "SIDEKICK_ENABLE_WARNINGS": "ON",
+        "SIDEKICK_WARNINGS_AS_ERRORS": "OFF",
+        "SIDEKICK_ENABLE_CLANG_TIDY": "ON",
+        "SIDEKICK_FETCHCONTENT_BASE_DIR": "${sourceDir}/.cache/fetchcontent"
+      }
+    },
+    {
+      "name": "ci",
+      "displayName": "CI",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/ci",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "SIDEKICK_ENABLE_WARNINGS": "ON",
+        "SIDEKICK_WARNINGS_AS_ERRORS": "ON",
+        "SIDEKICK_ENABLE_CLANG_TIDY": "ON",
+        "SIDEKICK_FETCHCONTENT_BASE_DIR": "${sourceDir}/.cache/fetchcontent"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "dev",
+      "configurePreset": "dev"
+    },
+    {
+      "name": "ci",
+      "configurePreset": "ci"
+    }
+  ]
+}
