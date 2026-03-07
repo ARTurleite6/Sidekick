@@ -152,31 +152,31 @@ bool WgpuGraphicsBackend::OnInit(const GraphicsContextDescriptor& descriptor)
 
 void WgpuGraphicsBackend::OnBeginFrame()
 {
-  assert(m_CommandEncoder == nullptr);
-  assert(m_RenderPassEncoder == nullptr);
+  assert(m_FrameContext.commandEncoder == nullptr);
+  assert(m_FrameContext.renderPassEncoder == nullptr);
 
-  ResetTransientState();
+  m_FrameContext.Reset();
 
   if (!AcquireSurfaceTexture())
   {
     throw std::runtime_error{"Failed to acquire WebGPU surface texture"};
   }
 
-  m_CommandEncoder = m_Device.CreateCommandEncoder();
-  if (m_CommandEncoder == nullptr)
+  m_FrameContext.commandEncoder = m_Device.CreateCommandEncoder();
+  if (m_FrameContext.commandEncoder == nullptr)
   {
-    ResetTransientState();
+    m_FrameContext.Reset();
     throw std::runtime_error{"Failed to create WebGPU command encoder"};
   }
 }
 
 void WgpuGraphicsBackend::OnBeginRenderPass(const RenderPassDescriptor& descriptor)
 {
-  assert(m_CommandEncoder != nullptr);
-  assert(m_RenderPassEncoder == nullptr);
-  assert(m_SurfaceTexture.texture != nullptr);
+  assert(m_FrameContext.commandEncoder != nullptr);
+  assert(m_FrameContext.renderPassEncoder == nullptr);
+  assert(m_FrameContext.surfaceTexture.texture != nullptr);
 
-  const wgpu::TextureView texture_view = m_SurfaceTexture.texture.CreateView();
+  const wgpu::TextureView texture_view = m_FrameContext.surfaceTexture.texture.CreateView();
   if (texture_view == nullptr)
   {
     throw std::runtime_error{"Failed to create WebGPU texture view"};
@@ -194,8 +194,8 @@ void WgpuGraphicsBackend::OnBeginRenderPass(const RenderPassDescriptor& descript
       .colorAttachments = &color_attachment,
   };
 
-  m_RenderPassEncoder = m_CommandEncoder.BeginRenderPass(&render_pass_descriptor);
-  if (m_RenderPassEncoder == nullptr)
+  m_FrameContext.renderPassEncoder = m_FrameContext.commandEncoder.BeginRenderPass(&render_pass_descriptor);
+  if (m_FrameContext.renderPassEncoder == nullptr)
   {
     throw std::runtime_error{"Failed to begin WebGPU render pass"};
   }
@@ -203,29 +203,29 @@ void WgpuGraphicsBackend::OnBeginRenderPass(const RenderPassDescriptor& descript
 
 void WgpuGraphicsBackend::OnEndRenderPass()
 {
-  assert(m_RenderPassEncoder != nullptr);
+  assert(m_FrameContext.renderPassEncoder != nullptr);
 
-  m_RenderPassEncoder.End();
-  m_RenderPassEncoder = nullptr;
+  m_FrameContext.renderPassEncoder.End();
+  m_FrameContext.renderPassEncoder = nullptr;
 }
 
 void WgpuGraphicsBackend::OnEndFrame()
 {
-  assert(m_CommandEncoder != nullptr);
-  assert(m_RenderPassEncoder == nullptr);
+  assert(m_FrameContext.commandEncoder != nullptr);
+  assert(m_FrameContext.renderPassEncoder == nullptr);
 
-  const wgpu::CommandBuffer command_buffer = m_CommandEncoder.Finish();
+  const wgpu::CommandBuffer command_buffer = m_FrameContext.commandEncoder.Finish();
   if (command_buffer == nullptr)
   {
-    ResetTransientState();
+    m_FrameContext.Reset();
     throw std::runtime_error{"Failed to finish WebGPU command buffer"};
   }
 
-  m_CommandEncoder = nullptr;
+  m_FrameContext.commandEncoder = nullptr;
   m_Queue.Submit(1, &command_buffer);
 
   const wgpu::Status present_status = m_Surface.Present();
-  ResetTransientState();
+  m_FrameContext.Reset();
 
   if (present_status != wgpu::Status::Success)
   {
@@ -235,8 +235,8 @@ void WgpuGraphicsBackend::OnEndFrame()
 
 void WgpuGraphicsBackend::OnResize(std::uint32_t width, std::uint32_t height)
 {
-  assert(m_CommandEncoder == nullptr);
-  assert(m_RenderPassEncoder == nullptr);
+  assert(m_FrameContext.commandEncoder == nullptr);
+  assert(m_FrameContext.renderPassEncoder == nullptr);
 
   if (!ConfigureSurface(width, height))
   {
@@ -328,16 +328,16 @@ bool WgpuGraphicsBackend::AcquireSurfaceTexture()
 {
   auto try_acquire = [this]()
   {
-    m_SurfaceTexture = {};
-    m_Surface.GetCurrentTexture(&m_SurfaceTexture);
-    return m_SurfaceTexture.status;
+    m_FrameContext.surfaceTexture = {};
+    m_Surface.GetCurrentTexture(&m_FrameContext.surfaceTexture);
+    return m_FrameContext.surfaceTexture.status;
   };
 
   wgpu::SurfaceGetCurrentTextureStatus status = try_acquire();
   if (status == wgpu::SurfaceGetCurrentTextureStatus::SuccessOptimal ||
       status == wgpu::SurfaceGetCurrentTextureStatus::SuccessSuboptimal)
   {
-    if (m_SurfaceTexture.texture == nullptr)
+    if (m_FrameContext.surfaceTexture.texture == nullptr)
     {
       std::cerr << "WebGPU surface acquisition succeeded without a texture\n";
       return false;
@@ -357,7 +357,7 @@ bool WgpuGraphicsBackend::AcquireSurfaceTexture()
     if (status == wgpu::SurfaceGetCurrentTextureStatus::SuccessOptimal ||
         status == wgpu::SurfaceGetCurrentTextureStatus::SuccessSuboptimal)
     {
-      if (m_SurfaceTexture.texture == nullptr)
+      if (m_FrameContext.surfaceTexture.texture == nullptr)
       {
         std::cerr << "WebGPU surface reacquisition succeeded without a texture\n";
         return false;
@@ -369,12 +369,5 @@ bool WgpuGraphicsBackend::AcquireSurfaceTexture()
 
   std::cerr << "Failed to acquire WebGPU surface texture: " << status << '\n';
   return false;
-}
-
-void WgpuGraphicsBackend::ResetTransientState()
-{
-  m_RenderPassEncoder = nullptr;
-  m_CommandEncoder = nullptr;
-  m_SurfaceTexture = {};
 }
 } // namespace Sidekick

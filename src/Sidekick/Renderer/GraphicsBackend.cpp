@@ -17,18 +17,9 @@ std::unique_ptr<GraphicsBackend> GraphicsBackend::Create()
 bool GraphicsBackend::Init(const GraphicsContextDescriptor& descriptor)
 {
   assert(!m_Initialized);
-  if (m_Initialized)
-  {
-    return false;
-  }
 
   m_Initialized = OnInit(descriptor);
-  if (!m_Initialized)
-  {
-    return false;
-  }
-
-  return true;
+  return m_Initialized;
 }
 
 void GraphicsBackend::BeginFrame()

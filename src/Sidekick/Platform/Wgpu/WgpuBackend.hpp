@@ -14,6 +14,20 @@ public:
   WgpuGraphicsBackend() = default;
 
 private:
+  struct FrameContext
+  {
+    void Reset()
+    {
+      renderPassEncoder = nullptr;
+      commandEncoder = nullptr;
+      surfaceTexture = {};
+    }
+
+    wgpu::SurfaceTexture surfaceTexture{};
+    wgpu::CommandEncoder commandEncoder;
+    wgpu::RenderPassEncoder renderPassEncoder;
+  };
+
   bool OnInit(const GraphicsContextDescriptor& descriptor) override;
 
   void OnBeginFrame() override;
@@ -26,7 +40,6 @@ private:
   bool RequestDevice();
   bool ConfigureSurface(uint32_t width, uint32_t height);
   bool AcquireSurfaceTexture();
-  void ResetTransientState();
 
   wgpu::Instance m_Instance;
   wgpu::Adapter m_Adapter;
@@ -35,9 +48,7 @@ private:
   wgpu::Surface m_Surface;
   wgpu::SurfaceConfiguration m_SurfaceConfiguration{};
 
-  wgpu::SurfaceTexture m_SurfaceTexture{};
-  wgpu::CommandEncoder m_CommandEncoder;
-  wgpu::RenderPassEncoder m_RenderPassEncoder;
+  FrameContext m_FrameContext{};
 };
 
 } // namespace Sidekick
