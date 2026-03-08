@@ -1,27 +1,27 @@
 #pragma once
 
-#include "Sidekick/Core/Window.hpp"
+#include "sidekick/core/window.hpp"
 
-namespace Sidekick
+namespace sidekick
 {
-struct Event;
-struct WindowClosedEvent;
-struct WindowResizeEvent;
+struct event;
+struct window_closed_event;
+struct window_resized_event;
 
-class Application
+class application
 {
 public:
-  Application();
+  application();
 
-  void Run();
+  void run();
 
 private:
-  void OnEvent(Event& event);
-  bool OnWindowClosed(WindowClosedEvent& event);
-  bool OnWindowResized(WindowResizeEvent& event);
+  void on_event(event& event);
+  bool on_window_closed(window_closed_event& event);
+  bool on_window_resized(window_resized_event& event);
 
-  bool m_Running{true};
-  bool m_IsMinimized{false};
-  Window m_Window;
+  bool m_running{true};
+  bool m_is_minimized{false};
+  window m_window;
 };
-} // namespace Sidekick
+} // namespace sidekick

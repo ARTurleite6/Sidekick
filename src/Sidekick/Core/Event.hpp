@@ -4,44 +4,44 @@
 #include <utility>
 #include <variant>
 
-namespace Sidekick
+namespace sidekick
 {
-struct WindowClosedEvent
+struct window_closed_event
 {
 };
 
-struct WindowResizeEvent
+struct window_resized_event
 {
-  int Width;
-  int Height;
+  int width;
+  int height;
 };
 
-using EventKind = std::variant<WindowClosedEvent, WindowResizeEvent>;
+using event_kind = std::variant<window_closed_event, window_resized_event>;
 
-struct Event
+struct event
 {
-  bool Handled{false};
-  EventKind Kind;
+  bool handled{false};
+  event_kind kind;
 };
 
-class EventDispatcher
+class event_dispatcher
 {
 public:
-  explicit EventDispatcher(Event* event) : m_Event(event) {}
+  explicit event_dispatcher(event* event) : m_event(event) {}
 
-  template <typename EventType, typename Callback> bool Dispatch(Callback&& callback)
+  template <typename EventType, typename Callback> bool dispatch(Callback&& callback)
   {
-    EventType* event = std::get_if<EventType>(&m_Event->Kind);
+    EventType* event = std::get_if<EventType>(&m_event->kind);
     if (event == nullptr)
     {
       return false;
     }
 
-    m_Event->Handled |= std::invoke(std::forward<Callback>(callback), *event);
+    m_event->handled |= std::invoke(std::forward<Callback>(callback), *event);
     return true;
   }
 
 private:
-  Event* m_Event;
+  event* m_event;
 };
-} // namespace Sidekick
+} // namespace sidekick

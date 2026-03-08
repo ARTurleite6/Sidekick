@@ -1,149 +1,132 @@
-#include "Sidekick/Core/Window.hpp"
+#include "sidekick/core/window.hpp"
 
-#include "Sidekick/Core/Event.hpp"
+#include "sidekick/core/event.hpp"
+#include "sidekick/renderer/graphics_backend.hpp"
 
 #include <GLFW/glfw3.h>
 
+#include <cassert>
 #include <cstdint>
-#include <stdexcept>
 #include <utility>
 
-namespace Sidekick
+namespace sidekick
 {
-int Window::s_GlfwWindowOwners{0};
+int window::s_glfw_window_owners{0};
 
-Window::Window(WindowDescriptor&& descriptor) : m_Descriptor{std::move(descriptor)}, m_OwnsGlfw{AcquireGlfw()}
+window::window(window_descriptor&& descriptor) : m_descriptor{std::move(descriptor)}, m_owns_glfw{acquire_glfw()}
 {
-  if (!m_OwnsGlfw)
-  {
-    throw std::runtime_error{"Failed to initialize GLFW"};
-  }
+  assert(m_owns_glfw);
 
-  try
-  {
-    m_Window = glfwCreateWindow(m_Descriptor.Width, m_Descriptor.Height, m_Descriptor.Title.c_str(), nullptr, nullptr);
-    if (m_Window == nullptr)
-    {
-      throw std::runtime_error{"Failed to create GLFW window"};
-    }
+  m_window = glfwCreateWindow(m_descriptor.width, m_descriptor.height, m_descriptor.title.c_str(), nullptr, nullptr);
+  assert(m_window && "Failed to create GLFW window");
 
-    glfwSetWindowUserPointer(m_Window, this);
-    glfwSetWindowCloseCallback(m_Window, CloseCallback);
-    glfwSetFramebufferSizeCallback(m_Window, ResizeCallback);
+  glfwSetWindowUserPointer(m_window, this);
+  glfwSetWindowCloseCallback(m_window, close_callback);
+  glfwSetFramebufferSizeCallback(m_window, resize_callback);
 
-    const Extent2D framebuffer_extent = GetFramebufferExtent();
-    m_GraphicsBackend = GraphicsBackend::Create();
-    const bool initialized =
-        m_GraphicsBackend != nullptr &&
-        m_GraphicsBackend->Init({.NativeWindow = m_Window, .FramebufferExtent = framebuffer_extent});
-    if (!initialized)
-    {
-      throw std::runtime_error{"Failed to initialize GraphicsBackend"};
-    }
-  }
-  catch (...)
+  const extent_2d framebuffer_extent = get_framebuffer_extent();
+  m_graphics_backend = graphics_backend::create();
+
+  assert(m_graphics_backend->init({.native_window = m_window, .framebuffer_extent = framebuffer_extent}) &&
+         "Failed to initialize graphics_backend");
+}
+
+window::~window()
+{
+  cleanup();
+}
+
+window::window(window&& other) noexcept
+    : m_descriptor(std::move(other.m_descriptor)), m_window(std::exchange(other.m_window, nullptr)),
+      m_graphics_backend(std::move(other.m_graphics_backend)), m_owns_glfw(std::exchange(other.m_owns_glfw, false))
+{
+  if (m_window != nullptr)
   {
-    Cleanup();
-    throw;
+    glfwSetWindowUserPointer(m_window, this);
   }
 }
 
-Window::~Window()
-{
-  Cleanup();
-}
-
-Window::Window(Window&& other) noexcept
-    : m_Descriptor(std::move(other.m_Descriptor)), m_Window(std::exchange(other.m_Window, nullptr)),
-      m_GraphicsBackend(std::move(other.m_GraphicsBackend)), m_OwnsGlfw(std::exchange(other.m_OwnsGlfw, false))
-{
-  if (m_Window != nullptr)
-  {
-    glfwSetWindowUserPointer(m_Window, this);
-  }
-}
-
-Window& Window::operator=(Window&& other) noexcept
+window& window::operator=(window&& other) noexcept
 {
   if (this == &other)
   {
     return *this;
   }
 
-  Cleanup();
+  cleanup();
 
-  m_Descriptor = std::move(other.m_Descriptor);
-  m_Window = std::exchange(other.m_Window, nullptr);
-  m_GraphicsBackend = std::move(other.m_GraphicsBackend);
-  m_OwnsGlfw = std::exchange(other.m_OwnsGlfw, false);
+  m_descriptor = std::move(other.m_descriptor);
+  m_window = std::exchange(other.m_window, nullptr);
+  m_graphics_backend = std::move(other.m_graphics_backend);
+  m_owns_glfw = std::exchange(other.m_owns_glfw, false);
 
-  if (m_Window != nullptr)
+  if (m_window != nullptr)
   {
-    glfwSetWindowUserPointer(m_Window, this);
+    glfwSetWindowUserPointer(m_window, this);
   }
 
   return *this;
 }
 
-void Window::PollEvents() const
+void window::poll_events() const
 {
   glfwPollEvents();
 }
 
-GraphicsBackend& Window::GetGraphicsBackend()
+graphics_backend& window::get_graphics_backend()
 {
-  return *m_GraphicsBackend;
+  return *m_graphics_backend;
 }
 
-const GraphicsBackend& Window::GetGraphicsBackend() const
+const graphics_backend& window::get_graphics_backend() const
 {
-  return *m_GraphicsBackend;
+  return *m_graphics_backend;
 }
 
-GLFWwindow* Window::GetNativeWindow() const
+GLFWwindow* window::get_native_window() const
 {
-  return m_Window;
+  return m_window;
 }
 
-Extent2D Window::GetFramebufferExtent() const
+extent_2d window::get_framebuffer_extent() const
 {
   int width{0};
   int height{0};
-  glfwGetFramebufferSize(m_Window, &width, &height);
+  glfwGetFramebufferSize(m_window, &width, &height);
 
-  return {.Width = static_cast<uint32_t>(width), .Height = static_cast<uint32_t>(height)};
+  return {.width = static_cast<uint32_t>(width), .height = static_cast<uint32_t>(height)};
 }
 
-void Window::CloseCallback(GLFWwindow* window)
+void window::close_callback(GLFWwindow* window)
 {
-  auto* owner = static_cast<Window*>(glfwGetWindowUserPointer(window));
+  auto* owner = static_cast<class window*>(glfwGetWindowUserPointer(window));
   if (owner == nullptr)
   {
     return;
   }
 
-  Event event{.Kind = WindowClosedEvent{}};
-  owner->NotifyEvent(event);
+  event event{.kind = window_closed_event{}};
+  owner->notify_event(event);
 }
 
-void Window::ResizeCallback(GLFWwindow* window, int width, int height)
+void window::resize_callback(GLFWwindow* window, int width, int height)
 {
-  auto* owner = static_cast<Window*>(glfwGetWindowUserPointer(window));
+  auto* owner = static_cast<class window*>(glfwGetWindowUserPointer(window));
   if (owner == nullptr)
   {
     return;
   }
 
-  owner->m_Descriptor.Width = width;
-  owner->m_Descriptor.Height = height;
+  owner->m_descriptor.width = width;
+  owner->m_descriptor.height = height;
 
-  Event event{.Kind = WindowResizeEvent{.Width = width, .Height = height}};
-  owner->NotifyEvent(event);
+  event event{.kind = window_resized_event{.width = width, .height = height}};
+  owner->notify_event(event);
 }
 
-bool Window::AcquireGlfw()
+bool window::acquire_glfw()
 {
-  if (s_GlfwWindowOwners == 0)
+  if (s_glfw_window_owners == 0)
   {
     if (glfwInit() == GLFW_FALSE)
     {
@@ -153,47 +136,47 @@ bool Window::AcquireGlfw()
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
   }
 
-  ++s_GlfwWindowOwners;
+  ++s_glfw_window_owners;
   return true;
 }
 
-void Window::ReleaseGlfw()
+void window::release_glfw()
 {
-  if (s_GlfwWindowOwners == 0)
+  if (s_glfw_window_owners == 0)
   {
     return;
   }
 
-  --s_GlfwWindowOwners;
-  if (s_GlfwWindowOwners == 0)
+  --s_glfw_window_owners;
+  if (s_glfw_window_owners == 0)
   {
     glfwTerminate();
   }
 }
 
-void Window::NotifyEvent(Event& event) const
+void window::notify_event(event& event) const
 {
-  if (m_Descriptor.EventCallback)
+  if (m_descriptor.event_callback)
   {
-    m_Descriptor.EventCallback(event);
+    m_descriptor.event_callback(event);
   }
 }
 
-void Window::Cleanup()
+void window::cleanup()
 {
-  m_GraphicsBackend.reset();
+  m_graphics_backend.reset();
 
-  if (m_Window != nullptr)
+  if (m_window != nullptr)
   {
-    glfwSetWindowUserPointer(m_Window, nullptr);
-    glfwDestroyWindow(m_Window);
-    m_Window = nullptr;
+    glfwSetWindowUserPointer(m_window, nullptr);
+    glfwDestroyWindow(m_window);
+    m_window = nullptr;
   }
 
-  if (m_OwnsGlfw)
+  if (m_owns_glfw)
   {
-    ReleaseGlfw();
-    m_OwnsGlfw = false;
+    release_glfw();
+    m_owns_glfw = false;
   }
 }
-} // namespace Sidekick
+} // namespace sidekick

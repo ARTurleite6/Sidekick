@@ -20,7 +20,9 @@ Checks: >
   -modernize-use-trailing-return-type,
   -cppcoreguidelines-pro-type-union-access,
   -bugprone-easily-swappable-parameters,
-  -cppcoreguidelines-pro-bounds-pointer-arithmetic
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -misc-non-private-member-variables-in-classes,
+  -portability-avoid-pragma-once
 
 WarningsAsErrors: ''
 HeaderFilterRegex: '^(src|include)/'

@@ -65,15 +65,15 @@ endif()
 set(SIDEKICK_SOURCES
     src/main.cpp
 
-    src/Sidekick/Core/Application.hpp
-    src/Sidekick/Core/Application.cpp
-    src/Sidekick/Core/Event.hpp
-    src/Sidekick/Core/Window.hpp
-    src/Sidekick/Core/Window.cpp
-    src/Sidekick/Renderer/GraphicsBackend.hpp
-    src/Sidekick/Renderer/GraphicsBackend.cpp
-    src/Sidekick/Platform/Wgpu/WgpuBackend.hpp
-    src/Sidekick/Platform/Wgpu/WgpuBackend.cpp
+    src/sidekick/core/application.hpp
+    src/sidekick/core/application.cpp
+    src/sidekick/core/event.hpp
+    src/sidekick/core/window.hpp
+    src/sidekick/core/window.cpp
+    src/sidekick/renderer/graphics_backend.hpp
+    src/sidekick/renderer/graphics_backend.cpp
+    src/sidekick/platform/wgpu/wgpu_backend.hpp
+    src/sidekick/platform/wgpu/wgpu_backend.cpp
 )
 
 add_executable(sidekick ${SIDEKICK_SOURCES})

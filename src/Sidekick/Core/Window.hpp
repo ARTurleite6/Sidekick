@@ -1,56 +1,56 @@
 #pragma once
 
-#include "Sidekick/Core/Event.hpp"
-#include "Sidekick/Renderer/GraphicsBackend.hpp"
+#include "sidekick/core/event.hpp"
+#include "sidekick/renderer/graphics_backend.hpp"
 
 #include <GLFW/glfw3.h>
 
 #include <functional>
 #include <string>
 
-namespace Sidekick
+namespace sidekick
 {
-struct WindowDescriptor
+struct window_descriptor
 {
-  int Width;
-  int Height;
-  std::string Title;
-  std::function<void(Event&)> EventCallback;
+  int width;
+  int height;
+  std::string title;
+  std::function<void(event&)> event_callback;
 };
 
-class Window
+class window
 {
 public:
-  explicit Window(WindowDescriptor&& descriptor);
-  ~Window();
+  explicit window(window_descriptor&& descriptor);
+  ~window();
 
-  Window(const Window&) = delete;
-  Window& operator=(const Window&) = delete;
+  window(const window&) = delete;
+  window& operator=(const window&) = delete;
 
-  Window(Window&& other) noexcept;
-  Window& operator=(Window&& other) noexcept;
+  window(window&& other) noexcept;
+  window& operator=(window&& other) noexcept;
 
-  void PollEvents() const;
-  [[nodiscard]] GraphicsBackend& GetGraphicsBackend();
-  [[nodiscard]] const GraphicsBackend& GetGraphicsBackend() const;
-  [[nodiscard]] GLFWwindow* GetNativeWindow() const;
-  [[nodiscard]] Extent2D GetFramebufferExtent() const;
+  void poll_events() const;
+  [[nodiscard]] graphics_backend& get_graphics_backend();
+  [[nodiscard]] const graphics_backend& get_graphics_backend() const;
+  [[nodiscard]] GLFWwindow* get_native_window() const;
+  [[nodiscard]] extent_2d get_framebuffer_extent() const;
 
 private:
-  static void CloseCallback(GLFWwindow* window);
-  static void ResizeCallback(GLFWwindow* window, int width, int height);
+  static void close_callback(GLFWwindow* window);
+  static void resize_callback(GLFWwindow* window, int width, int height);
 
-  static bool AcquireGlfw();
-  static void ReleaseGlfw();
-  static int s_GlfwWindowOwners;
+  static bool acquire_glfw();
+  static void release_glfw();
+  static int s_glfw_window_owners;
 
-  void Cleanup();
-  void NotifyEvent(Event& event) const;
+  void cleanup();
+  void notify_event(event& event) const;
 
-  WindowDescriptor m_Descriptor;
-  GLFWwindow* m_Window{nullptr};
-  std::unique_ptr<GraphicsBackend> m_GraphicsBackend;
+  window_descriptor m_descriptor;
+  GLFWwindow* m_window{nullptr};
+  std::unique_ptr<graphics_backend> m_graphics_backend;
 
-  bool m_OwnsGlfw{false};
+  bool m_owns_glfw{false};
 };
-} // namespace Sidekick
+} // namespace sidekick
