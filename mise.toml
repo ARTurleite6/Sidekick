@@ -1,0 +1,18 @@
+[tools]
+cmake = "latest"
+
+[tasks.configure]
+alias = "c"
+description = "Configure project"
+run = "mkdir -p build && cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug"
+
+[tasks.build]
+alias = "b"
+description = "Build project"
+run = "cd build && make -j8"
+
+[tasks.run]
+alias = "r"
+description = "Run project"
+run = "./build/Sidekick"
+depends = ["build"]
